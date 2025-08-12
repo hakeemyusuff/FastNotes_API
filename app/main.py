@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -30,16 +30,18 @@ async def get_notes(search: str | None = None):
             body = note_dict["body"].lower()
             if normalised_search in title or normalised_search in body:
                 note = notes[id]
-                search_result.update({id : note})
+                search_result.update({id: note})
                 continue
         return search_result
 
     return notes
 
+
 @app.get("/api/notes/{note_id}")
 async def get_note(note_id: int):
     note = notes.get(note_id, "This note have been moved or deleted.")
     return note
+
 
 @app.delete("/api/notes/{note_id}")
 async def delete_note(note_id: int):
@@ -49,12 +51,33 @@ async def delete_note(note_id: int):
     else:
         return {"message": "This note doesn't exist."}
 
+
+@app.put("/api/notes/{note_id}")
+async def update_note(note_id: int, updated_note: Note):
+    if not notes.get(note_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The note doesn't exist.",
+        )
+        
+    old_note =  Note.model_validate(notes.get(note_id))
+    new_title = updated_note.title
+    new_body = updated_note.body
+    old_note.title = new_title
+    old_note.body = new_body
+    old_note.edited_at = datetime.now()
+    modified_note = Note.model_dump(old_note)
+    notes[note_id] = modified_note
+    return {"message": "Note updated successfully."}
+    
+
+
 @app.post("/api/notes/")
 async def add_note(note: Note):
     global id
     if note:
         note_dict = Note.model_dump(note)
         note_dict.update({"id": id})
-        notes.update({id : note_dict})
+        notes.update({id: note_dict})
         id = id + 1
     return {"message": "Note added successfully.", "note": note_dict}
