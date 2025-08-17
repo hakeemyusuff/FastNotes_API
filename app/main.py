@@ -1,26 +1,35 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Any
 
 app = FastAPI()
 
 
-class Note(BaseModel):
+class NoteIn(BaseModel):
     title: str
     body: str
-    created_at: datetime = datetime.now()
-    edited_at: datetime = datetime.now()
+
+
+class NoteOut(BaseModel):
+    id: int
+    title: str
+    body: str
+    created_at: datetime
+    edited_at: datetime
 
 
 id = 0
 notes: dict[int, dict[str, str]] = {}
 
 
-@app.get("/api/notes")
-async def get_notes(search: str | None = None):
+@app.get("/api/notes", response_model=dict[int, NoteOut])
+async def get_notes(search: str | None = None) -> Any:
     """This endpoints returns all the notes"""
     if not notes:
-        return {"message": "You currently don't have any notes.."}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No Note found"
+        )
     if search is not None and search != "":
         normalised_search = search.strip().lower()
         search_result: dict[int, dict[str, str]] = {}
@@ -37,47 +46,57 @@ async def get_notes(search: str | None = None):
     return notes
 
 
-@app.get("/api/notes/{note_id}")
-async def get_note(note_id: int):
-    note = notes.get(note_id, "This note have been moved or deleted.")
+@app.get("/api/notes/{note_id}", response_model=NoteOut)
+async def get_note(note_id: int) -> Any:
+    note = notes.get(note_id)
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found",
+        )
     return note
 
 
 @app.delete("/api/notes/{note_id}")
-async def delete_note(note_id: int):
+async def delete_note(note_id: int) -> dict[str, str]:
     if notes.get(note_id):
         notes.pop(note_id)
         return {"message": f"note with id {note_id} deleted successfully."}
     else:
-        return {"message": "This note doesn't exist."}
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
-@app.put("/api/notes/{note_id}")
-async def update_note(note_id: int, updated_note: Note):
+@app.put("/api/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def update_note(note_id: int, updated_note: NoteIn) -> None:
     if not notes.get(note_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="The note doesn't exist.",
         )
-        
-    old_note =  Note.model_validate(notes.get(note_id))
+
+    old_note = NoteOut.model_validate(notes.get(note_id))
     new_title = updated_note.title
     new_body = updated_note.body
     old_note.title = new_title
     old_note.body = new_body
     old_note.edited_at = datetime.now()
-    modified_note = Note.model_dump(old_note)
+    modified_note = NoteOut.model_dump(old_note)
     notes[note_id] = modified_note
-    return {"message": "Note updated successfully."}
-    
+    return
 
 
-@app.post("/api/notes/")
-async def add_note(note: Note):
+@app.post(
+    "/api/notes/",
+    response_model=NoteOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_note(note: NoteIn):
     global id
     if note:
-        note_dict = Note.model_dump(note)
+        note_dict = NoteIn.model_dump(note)
         note_dict.update({"id": id})
+        note_dict.update({"created_at": datetime.now()})
+        note_dict.update({"edited_at": datetime.now()})
         notes.update({id: note_dict})
         id = id + 1
-    return {"message": "Note added successfully.", "note": note_dict}
+    return note_dict
