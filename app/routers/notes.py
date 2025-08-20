@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, status
-from typing import Annotated,Any
+from fastapi import APIRouter, HTTPException, status, Depends
+from typing import Annotated, Any
 from app.schemas.notes import NoteIn, NoteOut
+from app.dependencies import get_current_active_user
 from datetime import datetime
+from app.schemas.users import User
 
 router = APIRouter(prefix="/api/notes", tags=["Notes"])
 
@@ -9,8 +11,12 @@ router = APIRouter(prefix="/api/notes", tags=["Notes"])
 id = 0
 notes: dict[int, dict[str, str]] = {}
 
+
 @router.get("/", response_model=dict[int, NoteOut])
-async def get_notes(search: str | None = None) -> Any:
+async def get_notes(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    search: str | None = None,
+) -> Any:
     """This endpoints returns all the notes"""
     if not notes:
         raise HTTPException(
@@ -33,7 +39,10 @@ async def get_notes(search: str | None = None) -> Any:
 
 
 @router.get("/{note_id}", response_model=NoteOut)
-async def get_note(note_id: int) -> Any:
+async def get_note(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    note_id: int,
+) -> Any:
     note = notes.get(note_id)
     if not note:
         raise HTTPException(
@@ -44,7 +53,10 @@ async def get_note(note_id: int) -> Any:
 
 
 @router.delete("/{note_id}")
-async def delete_note(note_id: int) -> dict[str, str]:
+async def delete_note(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    note_id: int,
+) -> dict[str, str]:
     if notes.get(note_id):
         notes.pop(note_id)
         return {"message": f"note with id {note_id} deleted successfully."}
@@ -53,7 +65,11 @@ async def delete_note(note_id: int) -> dict[str, str]:
 
 
 @router.put("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def update_note(note_id: int, updated_note: NoteIn) -> None:
+async def update_note(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    note_id: int,
+    updated_note: NoteIn,
+) -> None:
     if not notes.get(note_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -76,7 +92,10 @@ async def update_note(note_id: int, updated_note: NoteIn) -> None:
     response_model=NoteOut,
     status_code=status.HTTP_201_CREATED,
 )
-async def add_note(note: NoteIn):
+async def add_note(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    note: NoteIn,
+):
     global id
     if note:
         note_dict = NoteIn.model_dump(note)
