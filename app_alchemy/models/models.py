@@ -1,23 +1,14 @@
-from typing import Annotated
-from datetime import datetime
-from sqlmodel import Field, SQLModel
+from sqlalchemy import Column, Integer, String, DateTime, func
+from ..dependencies import Base
 
 
-class NoteBase(SQLModel):
-    title: str | None = Field(index=True)
-    body: str | None
 
 
-class Note(NoteBase, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    created_at: datetime = Field(default_factory=datetime.now)
-    edited_at: datetime = Field(default_factory=datetime.now)
+class Note(Base):
+    __tablename__ = "Notes"
 
-
-class NoteCreate(NoteBase):
-    pass
-
-
-class NoteUpdate(NoteBase):
-    title: str | None = None
-    body: str | None = None
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(100), index=True)
+    body = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    edited_at = Column(DateTime(timezone=True), onupdate=func.now())
